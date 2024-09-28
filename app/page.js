@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState, useEffect } from "react";
 import { Camera } from "react-camera-pro";
+import OpenAI from "openai";
 
 export default function Home() {
   const camera = useRef(null);
@@ -15,12 +16,43 @@ export default function Home() {
           clearInterval(interval); // Clear interval when countdown reaches 1
           const photo = camera.current.takePhoto(); // Take the photo
           setImage(photo); // Set the taken photo
+          imgToLetter(photo); // const base64Image = convertToBase64(photo); // Convert to base64
+          // imgToLetter(base64Image);
           return 0;
         }
         return prev - 1; // Decrease countdown by 1 each second
       });
     }, 1000);
   };
+
+  const openai = new OpenAI({
+    apiKey:
+    dangerouslyAllowBrowser: true,
+  });
+
+  async function imgToLetter(image) {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Describe the contents of this image in sign language.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: image,
+              },
+            },
+          ],
+        },
+      ],
+    });
+    console.log(response.choices[0]);
+  }
 
   // Determine the border color based on the countdown value
   const getBorderColor = () => {
