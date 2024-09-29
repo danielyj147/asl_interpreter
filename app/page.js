@@ -1,12 +1,14 @@
 "use client";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Camera } from "react-camera-pro";
 import OpenAI from "openai";
+// Move OpenAI calls to the server or backend
 
 export default function Home() {
   const camera = useRef(null);
   const [image, setImage] = useState(null);
   const [countdown, setCountdown] = useState(0);
+  const [answers, setAnswers] = useState([]);
 
   const handleTakePhoto = () => {
     setCountdown(3); // Start countdown from 3
@@ -16,21 +18,50 @@ export default function Home() {
           clearInterval(interval); // Clear interval when countdown reaches 1
           const photo = camera.current.takePhoto(); // Take the photo
           setImage(photo); // Set the taken photo
-          imgToLetter(photo); // const base64Image = convertToBase64(photo); // Convert to base64
-          // imgToLetter(base64Image);
+
+          imgToLetter(photo).then((response) => {
+            const message = response.choices[0].message.content;
+
+            setAnswers((prev) => [
+              ...prev,
+              [photo, message, Date.now()], // Properly update answers array
+            ]);
+          });
+
           return 0;
         }
         return prev - 1; // Decrease countdown by 1 each second
       });
     }, 1000);
   };
+  function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
 
-  const openai = new OpenAI({
-    apiKey:
-    dangerouslyAllowBrowser: true,
-  });
+    // Format the date as MM/DD/YYYY
+    const formattedDate = date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
 
+    // Format the time as HH:MM AM/PM
+    const formattedTime = date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+
+    return `${formattedDate} ${formattedTime}`;
+  }
+  // Make sure to move OpenAI API calls to the backend
   async function imgToLetter(image) {
+    const openai = new OpenAI({
+      apiKey:
+
+      dangerouslyAllowBrowser: true,
+    });
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -39,7 +70,7 @@ export default function Home() {
           content: [
             {
               type: "text",
-              text: "Describe the contents of this image in sign language.",
+              text: "What is the word being said in American sign language, Can you give me the answer by saying the word being shown in ASL is ...",
             },
             {
               type: "image_url",
@@ -51,9 +82,10 @@ export default function Home() {
         },
       ],
     });
-    console.log(response.choices[0]);
-  }
+    response.choices[0]["message"]["content"];
 
+    return response;
+  }
   // Determine the border color based on the countdown value
   const getBorderColor = () => {
     if (countdown === 3) return "border-green-500";
@@ -63,17 +95,54 @@ export default function Home() {
   };
 
   return (
-    <main className="items-center justify-items-center min-h-screen gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
+    <main className="items-center justify-items-center min-h-screen font-[family-name:var(--font-geist-sans)]">
       <div
-        className={`grid grid-cols-3 gap-4 items-center justify-items-center h-fill p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)] border-4 rounded ${getBorderColor()}`}
+        className={`grid grid-cols-2 gap-4 items-center justify-items-center h-full p-3 font-[family-name:var(--font-geist-sans)] border-4 rounded ${getBorderColor()}`}
       >
-        <div></div>
-        <div className="flex flex-col w-full">
-          <div className="flex w-full">
+        <div className="flex w-full flex-col items-center p-4">
+          {/* Container for displaying answers */}
+          <div className="flex w-full h-full  bg-gray-800 p-4 space-y-4 rounded">
+            {/* Check if answers is not null */}
+            {answers ? (
+              <div className="flex flex-col w-full h-[850px] bg-gray-800 overflow-scroll p-4 space-y-4 rounded">
+                {answers.map(([photo, message, timestamp], index) => (
+                  <div
+                    key={index}
+                    className="bg-gray-700 p-4 rounded-lg shadow-md flex items-start space-x-4"
+                  >
+                    {/* Display the photo */}
+                    <img
+                      src={photo}
+                      alt="answer photo"
+                      className="w-16 h-16 object-cover rounded-full"
+                    />
+
+                    {/* Display the message and timestamp */}
+                    <div>
+                      <p className="text-white mb-2">{message}</p>
+                      <p className="text-gray-400 text-sm">
+                        {formatTimestamp(timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Fallback message for empty answers */}
+                {answers.length === 0 && (
+                  <p className="text-gray-400">No answers available yet.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-400">No answers available.</p> // Message when answers is null
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-center w-full">
+          <div className="flex w-full h-82">
             <Camera
               ref={camera}
-              aspectRatio={32 / 18}
-              className="flex w-full rounded"
+              aspectRatio={16 / 9}
+              className="flex w-full h-82 rounded"
             />{" "}
           </div>
           <button
@@ -85,12 +154,13 @@ export default function Home() {
               {countdown > 0 ? `Taking photo in ${countdown}...` : "Take Photo"}
             </span>{" "}
           </button>
+
+          {image ? (
+            <img src={image} alt="Taken photo" className="flex w-10/12" />
+          ) : (
+            <div className="flex w-10/12 h-72 border-gray-400 border-4 border-dashed rounded"></div>
+          )}
         </div>
-        {image ? (
-          <img src={image} alt="Taken photo" className="flex h-64" />
-        ) : (
-          <div className="flex w-full h-64 border-gray-400 border-4 border-dashed rounded"></div>
-        )}
       </div>
     </main>
   );
